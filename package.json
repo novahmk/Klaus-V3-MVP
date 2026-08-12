@@ -1,0 +1,29 @@
+{
+  "name": "klaus-v2",
+  "version": "0.1.0",
+  "description": "Klaus V2 — SDR conversacional baseado em IA",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/app/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
+    "fastify": "^5.11.3",
+    "ioredis": "^5.6.1",
+    "openai": "^4.104.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.4"
+  }
+}

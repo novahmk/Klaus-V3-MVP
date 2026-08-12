@@ -1,0 +1,14 @@
+export * from './components/1-deteccao-intencao/index.js';
+export * as geracaoPerguntas from './components/2-geracao-perguntas/index.js';
+export * as geracaoResposta from './components/5-geracao-resposta/index.js';
+export * as orquestracao from './components/7-orquestracao/index.js';
+export * as persistencia from './infra/persistencia/index.js';
+export * as memoria from './infra/memoria/index.js';
+export * as playbook from './dominio/playbook/index.js';
+export * as filas from './infra/filas/fila-memoria.js';
+export * as wasender from './integrations/wasender/index.js';
+export * as boot from './infra/boot/boot.js';
+export * as ambiente from './infra/config/ambiente.js';
+export * as schema from './infra/database/verificar-schema.js';
+export { ClienteSupabaseAdapter, LeitorSchemaSupabase } from './infra/database/cliente-supabase.js';
+export { CONTRATO_SCHEMA, TABELAS_DO_CONTRATO } from './infra/database/schema-contrato.js';
