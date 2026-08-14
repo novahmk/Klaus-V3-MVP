@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ProvedorConfiguracaoSupabase, TABELA_CONFIG_IA } from '../adaptadores/configuracao.js';
 import { CONTRATO_SCHEMA } from '../../infra/database/schema-contrato.js';
@@ -28,7 +28,7 @@ function leitorValido(): LeitorSchema {
   return { listarColunas: () => Promise.resolve(colunas) };
 }
 
-function criarApp() {
+function criarApp(opcoes: { enviar?: (telefone: string, texto: string) => Promise<void> } = {}) {
   const cliente = new ClienteMemoria({
     [TABELA_LEADS]: [
       {
@@ -68,6 +68,7 @@ function criarApp() {
       chaveInterna: CHAVE,
       persistencia: { cliente },
       configuracao: new ProvedorConfiguracaoSupabase({ cliente }),
+      enviar: opcoes.enviar ?? (() => Promise.resolve()),
     },
   });
 
@@ -297,6 +298,31 @@ describe('config da IA', () => {
     await app.close();
   });
 
+  it('aceita regras de conversa no payload e persiste as listas', async () => {
+    const { app, cliente } = criarApp();
+
+    const resposta = await app.inject({
+      method: 'PUT',
+      url: '/api/config',
+      headers: auth,
+      payload: {
+        nao_prometer: ['desconto', 'prazo garantido'],
+        sempre_confirmar: ['horário', 'valor'],
+        escalar_humano_quando: ['não me interessa'],
+      },
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json().regras.nao_prometer).toEqual(['desconto', 'prazo garantido']);
+    expect(cliente.linhas('regras_conversa')[0]).toMatchObject({
+      nao_prometer: ['desconto', 'prazo garantido'],
+      sempre_confirmar: ['horário', 'valor'],
+      escalar_humano_quando: ['não me interessa'],
+    });
+
+    await app.close();
+  });
+
   it('recusa campo desconhecido', async () => {
     const { app } = criarApp();
 
@@ -323,6 +349,51 @@ describe('config da IA', () => {
     });
 
     expect(resposta.statusCode).toBe(400);
+
+    await app.close();
+  });
+});
+
+describe('envio manual de mensagem do lead', () => {
+  it('salva a mensagem de saída e envia via cliente externo', async () => {
+    const enviar = vi.fn().mockResolvedValue(undefined);
+    const { app, cliente } = criarApp({ enviar });
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: `/api/leads/${LEAD_ID}/mensagens`,
+      headers: auth,
+      payload: { texto: 'Mensagem de teste do dashboard' },
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(enviar).toHaveBeenCalledWith('5511999998888', 'Mensagem de teste do dashboard');
+    expect(cliente.linhas(TABELA_MENSAGENS)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          lead_id: LEAD_ID,
+          direcao: 'saida',
+          conteudo: 'Mensagem de teste do dashboard',
+        }),
+      ]),
+    );
+
+    await app.close();
+  });
+
+  it('recusa texto vazio em envio manual', async () => {
+    const enviar = vi.fn();
+    const { app } = criarApp({ enviar });
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: `/api/leads/${LEAD_ID}/mensagens`,
+      headers: auth,
+      payload: { texto: '   ' },
+    });
+
+    expect(resposta.statusCode).toBe(400);
+    expect(enviar).not.toHaveBeenCalled();
 
     await app.close();
   });

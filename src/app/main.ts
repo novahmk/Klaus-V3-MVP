@@ -92,6 +92,7 @@ async function main(): Promise<void> {
       chaveInterna: ambiente.internalApiKey,
       persistencia,
       configuracao: orquestrador.configuracao,
+      enviar: orquestrador.enviar,
     },
   });
 

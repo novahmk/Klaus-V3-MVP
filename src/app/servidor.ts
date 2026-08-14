@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { LogController } from 'fastify';
 import type { FastifyInstance } from 'fastify';
 
 import { verificarSaude } from '../infra/boot/boot.js';
@@ -29,7 +29,9 @@ export function criarServidor(deps: DependenciasServidor): FastifyInstance {
   const app = Fastify({
     logger: deps.logger ?? false,
     bodyLimit: LIMITE_CORPO_BYTES,
-    disableRequestLogging: true,
+    logController: new LogController({
+      disableRequestLogging: true,
+    }),
     // Por padrão o Fastify REMOVE campos desconhecidos em silêncio. Preferimos
     // recusar: um campo que o dashboard envia e o backend ignora sem avisar é
     // exatamente o drift silencioso que quebrou o V1.
