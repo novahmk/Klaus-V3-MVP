@@ -1,12 +1,9 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-
 import { carregarAmbiente } from '../config/ambiente.js';
 import type { Ambiente } from '../config/ambiente.js';
 import { garantirSchema } from '../database/verificar-schema.js';
 import type { LeitorSchema } from '../database/verificar-schema.js';
 import type { ClienteSupabase } from '../persistencia/index.js';
 import { comTimeout } from '../resiliencia/timeout.js';
-import { validarSchemaSupabase } from './supabase-schema.js';
 
 /** Nenhuma verificação de saúde pode demorar mais que isso. */
 export const TIMEOUT_SAUDE_MS = 3000;
@@ -28,8 +25,6 @@ export interface Saude {
 export interface DependenciasBoot {
   cliente: ClienteSupabase;
   leitorSchema: LeitorSchema;
-  /** Cliente bruto do Supabase, usado para validar o schema via `information_schema`. */
-  client?: SupabaseClient;
   agora?: () => Date;
   timeoutMs?: number;
 }
@@ -100,11 +95,6 @@ export async function iniciar(
     throw new BootError('Schema do banco incompatível com o contrato do código.', {
       cause: error,
     });
-  }
-
-  if (deps.client !== undefined) {
-    await validarSchemaSupabase(deps.client);
-    console.log('✅ Conexão Supabase e schema validados.');
   }
 
   return ambiente;
