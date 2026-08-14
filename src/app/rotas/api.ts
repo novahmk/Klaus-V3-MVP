@@ -141,7 +141,7 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
           conteudo,
           direcao: 'saida',
           criado_em: new Date().toISOString(),
-        });
+        }) as { id: string };
 
         await deps.persistencia.cliente.atualizarPorId('leads', id, {
           ultima_mensagem: conteudo,
@@ -211,7 +211,7 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
           } else {
             const leads = await deps.persistencia.cliente.selecionarTodos('leads', {
               telefone: target.phone,
-            });
+            }) as Array<{ id: string }>;
 
             if (leads.length > 0) {
               leadId = leads[0].id;
@@ -220,7 +220,7 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
                 telefone: target.phone,
                 estagio: 'novo',
                 criado_em: agora,
-              });
+              }) as { id: string };
 
               leadId = nl.id;
             }
