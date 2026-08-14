@@ -15,7 +15,7 @@ import {
   enviarMensagem,
   listarLeads,
   listarMensagens,
-} from "@/lib/klaus-api.server";
+} from "@/lib/klaus-api";
 import { ESTAGIOS, type LeadReal } from "@/lib/klaus-types";
 import { ultimaInteracaoRelativa, statusDoErro } from "@/lib/utils";
 

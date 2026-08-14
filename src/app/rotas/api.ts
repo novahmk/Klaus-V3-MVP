@@ -49,6 +49,9 @@ const PARAMS_LEAD = {
  * falhava em silêncio lá dentro em vez de ser recusado na porta de entrada.
  */
 export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): void {
+  // Dashboard é servido pela mesma origem e chama /api sem chave (decisão de
+  // produto: painel aberto). A chave continua validada quando enviada, para
+  // integrações externas não regredirem em silêncio com chave errada.
   app.addHook('onRequest', (requisicao, resposta, proximo) => {
     if (!requisicao.url.startsWith(PREFIXO_API)) {
       return proximo();
@@ -57,7 +60,7 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
     const recebida = requisicao.headers[HEADER_CHAVE_INTERNA];
     const chave = Array.isArray(recebida) ? recebida[0] : recebida;
 
-    if (!chaveConfere(chave, deps.chaveInterna)) {
+    if (chave !== undefined && !chaveConfere(chave, deps.chaveInterna)) {
       return resposta.status(401).send({ erro: 'Chave interna inválida.' });
     }
 

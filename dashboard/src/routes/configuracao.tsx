@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn, statusDoErro } from "@/lib/utils";
-import { buscarConfiguracao, atualizarConfiguracao } from "@/lib/klaus-api.server";
+import { buscarConfiguracao, atualizarConfiguracao } from "@/lib/klaus-api";
 import type { RegrasConversaReal } from "@/lib/klaus-types";
 
 export const Route = createFileRoute("/configuracao")({

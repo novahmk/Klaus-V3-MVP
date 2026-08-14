@@ -18,6 +18,8 @@ import {
   ClienteIARespostaOpenAI,
 } from './adaptadores/gerador-resposta.js';
 import { criarServidor } from './servidor.js';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 /** Tempo máximo para drenar conexões antes de encerrar o processo. */
 const TIMEOUT_ENCERRAMENTO_MS = 10_000;
@@ -76,10 +78,15 @@ async function main(): Promise<void> {
     }),
   );
 
+  // Build da SPA do dashboard (gerado por `npm run build`); ausente em dev
+  // do backend puro, e nesse caso a raiz volta a ser o liveness JSON.
+  const raizDashboard = resolve(process.cwd(), 'dashboard', 'dist');
+
   const app = criarServidor({
     cliente,
     leitorSchema,
     logger: true,
+    ...(existsSync(raizDashboard) ? { dashboard: { raiz: raizDashboard } } : {}),
     webhook: {
       segredo: ambiente.wasenderWebhookSecret,
       enfileirar: (mensagem) => {

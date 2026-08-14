@@ -1,5 +1,6 @@
 import Fastify, { LogController } from 'fastify';
 import type { FastifyInstance } from 'fastify';
+import fastifyStatic from '@fastify/static';
 
 import { verificarSaude } from '../infra/boot/boot.js';
 import type { DependenciasBoot } from '../infra/boot/boot.js';
@@ -15,15 +16,17 @@ export interface DependenciasServidor extends DependenciasBoot {
   logger?: boolean;
   webhook?: DependenciasWebhook;
   api?: DependenciasApi;
+  /** Pasta com o build da SPA do dashboard (dashboard/dist). */
+  dashboard?: { raiz: string };
 }
 
 /**
  * Servidor HTTP do backend.
  *
- * Liveness (`/`) e readiness (`/health`) são endpoints distintos de propósito:
- * `/` responde 200 sempre, mesmo com o banco fora, para o orquestrador do
- * Railway não entrar em crash-loop; `/health` diz a verdade sobre as
- * dependências e devolve 503 quando algo está quebrado.
+ * Readiness fica em `/health` e diz a verdade sobre as dependências (503
+ * quando algo está quebrado). A raiz serve a SPA do dashboard quando o build
+ * existe; sem ele, responde o liveness JSON de sempre para o Railway não
+ * entrar em crash-loop.
  */
 export function criarServidor(deps: DependenciasServidor): FastifyInstance {
   const app = Fastify({
@@ -38,7 +41,13 @@ export function criarServidor(deps: DependenciasServidor): FastifyInstance {
     ajv: { customOptions: { removeAdditional: false } },
   });
 
-  app.get('/', () => ({ servico: 'klaus-backend', status: 'no ar' }));
+  // Com dashboard, a raiz serve a SPA e o liveness fica em /health;
+  // sem ele (testes, build parcial), a raiz continua sendo o liveness JSON.
+  if (deps.dashboard === undefined) {
+    app.get('/', () => ({ servico: 'klaus-backend', status: 'no ar' }));
+  } else {
+    app.register(fastifyStatic, { root: deps.dashboard.raiz });
+  }
 
   app.get('/health', async (_requisicao, resposta) => {
     const saude = await verificarSaude(deps);
@@ -54,9 +63,22 @@ export function criarServidor(deps: DependenciasServidor): FastifyInstance {
     registrarRotasApi(app, deps.api);
   }
 
-  app.setNotFoundHandler((requisicao, resposta) =>
-    resposta.status(404).send({ erro: `Rota não encontrada: ${requisicao.url}` }),
-  );
+  app.setNotFoundHandler((requisicao, resposta) => {
+    // SPA com rotas client-side (/kanban, /configuracao): qualquer GET fora de
+    // /api e /webhooks devolve o index.html e o roteador do navegador assume.
+    const ehGet = requisicao.method === 'GET' || requisicao.method === 'HEAD';
+    const ehSpa =
+      deps.dashboard !== undefined &&
+      ehGet &&
+      !requisicao.url.startsWith('/api') &&
+      !requisicao.url.startsWith('/webhooks');
+
+    if (ehSpa) {
+      return resposta.sendFile('index.html');
+    }
+
+    return resposta.status(404).send({ erro: `Rota não encontrada: ${requisicao.url}` });
+  });
 
   return app;
 }

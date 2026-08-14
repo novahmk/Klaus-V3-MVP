@@ -21,5 +21,5 @@ export function ultimaInteracaoRelativa(iso: string | null): string {
 export function statusDoErro(err: unknown): number | null {
   const msg = err instanceof Error ? err.message : String(err);
   const m = /respondeu (\d{3}) em/.exec(msg);
-  return m ? parseInt(m[1], 10) : null;
+  return m?.[1] !== undefined ? parseInt(m[1], 10) : null;
 }

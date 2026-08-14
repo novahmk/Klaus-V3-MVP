@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cadenciaPadrao, filaInicial, modelosMensagem, type ContatoFila } from "@/lib/klaus-data";
-import { iniciarProspeccao, listarLeads } from "@/lib/klaus-api.server";
+import { iniciarProspeccao, listarLeads } from "@/lib/klaus-api";
 import { ESTAGIOS, rotuloEstagio, type Estagio } from "@/lib/klaus-types";
 import { ultimaInteracaoRelativa, statusDoErro } from "@/lib/utils";
 

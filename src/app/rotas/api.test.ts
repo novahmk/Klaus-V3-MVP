@@ -78,12 +78,12 @@ function criarApp(opcoes: { enviar?: (telefone: string, texto: string) => Promis
 const auth = { [HEADER_CHAVE_INTERNA]: CHAVE };
 
 describe('autenticação da API', () => {
-  it('recusa requisição sem chave interna', async () => {
+  it('aceita requisição sem chave interna (dashboard servido pela mesma origem)', async () => {
     const { app } = criarApp();
 
     const resposta = await app.inject({ method: 'GET', url: '/api/leads' });
 
-    expect(resposta.statusCode).toBe(401);
+    expect(resposta.statusCode).toBe(200);
 
     await app.close();
   });

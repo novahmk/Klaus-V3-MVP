@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { CONTRATO_SCHEMA } from '../infra/database/schema-contrato.js';
 import type { ColunaReal, LeitorSchema } from '../infra/database/verificar-schema.js';
@@ -125,6 +128,33 @@ describe('rota inexistente', () => {
     const resposta = await app.inject({ method: 'GET', url: '/nao-existe' });
 
     expect(resposta.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('serve o dashboard na raiz e faz fallback SPA quando o build existe', async () => {
+    const raiz = mkdtempSync(join(tmpdir(), 'dashboard-'));
+    writeFileSync(join(raiz, 'index.html'), '<!doctype html><title>Klaus AI</title>');
+
+    const app = criarServidor({
+      cliente: new ClienteMemoria({ leads: [] }),
+      leitorSchema: leitorValido(),
+      dashboard: { raiz },
+    });
+
+    const raizResposta = await app.inject({ method: 'GET', url: '/' });
+    expect(raizResposta.statusCode).toBe(200);
+    expect(raizResposta.body).toContain('Klaus AI');
+
+    // Rota client-side desconhecida do Fastify volta o index.html.
+    const spa = await app.inject({ method: 'GET', url: '/kanban' });
+    expect(spa.statusCode).toBe(200);
+    expect(spa.body).toContain('Klaus AI');
+
+    // /api continua 404 JSON, nunca HTML.
+    const api = await app.inject({ method: 'GET', url: '/api/nao-existe' });
+    expect(api.statusCode).toBe(404);
+    expect(api.json()).toMatchObject({ erro: expect.stringContaining('/api/nao-existe') });
 
     await app.close();
   });
