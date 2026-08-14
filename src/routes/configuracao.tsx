@@ -10,7 +10,7 @@ import { HelpTooltip } from "@/components/help-tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn, statusDoErro } from "@/lib/utils";
 import { buscarConfiguracao, atualizarConfiguracao } from "@/lib/klaus-api.server";
 import type { RegrasConversaReal } from "@/lib/klaus-types";
 
@@ -58,22 +58,40 @@ function Configuracao() {
   const configQuery = useQuery({
     queryKey: ["configuracao"],
     queryFn: () => buscarConfiguracao(),
+    refetchOnWindowFocus: false, // evita resetar edições não salvas ao trocar de aba
   });
 
   const [persona, setPersona] = useState("");
   const [objetivo, setObjetivo] = useState("");
   const [tomDeVoz, setTomDeVoz] = useState("");
   const [contexto, setContexto] = useState("");
+  const [naoPrometer, setNaoPrometer] = useState("");
+  const [sempreConfirmar, setSempreConfirmar] = useState("");
+  const [escalarHumanoQuando, setEscalarHumanoQuando] = useState("");
 
   useEffect(() => {
     if (!configQuery.data) return;
     setPersona(configQuery.data.agente.persona);
     setObjetivo(configQuery.data.agente.objetivo);
-    setTomDeVoz(configQuery.data.agente.tomDeVoz);
-    setContexto(configQuery.data.agente.contexto);
+    setTomDeVoz(configQuery.data.agente.tomDeVoz ?? "");
+    setContexto(configQuery.data.agente.contexto ?? "");
+    setNaoPrometer(configQuery.data.regras.nao_prometer.join("\n"));
+    setSempreConfirmar(configQuery.data.regras.sempre_confirmar.join("\n"));
+    setEscalarHumanoQuando(configQuery.data.regras.escalar_humano_quando.join("\n"));
   }, [configQuery.data]);
 
-  const regras = configQuery.data?.regras;
+  const regrasEditaveis: Record<ChaveRegra, [string, (v: string) => void]> = {
+    nao_prometer: [naoPrometer, setNaoPrometer],
+    sempre_confirmar: [sempreConfirmar, setSempreConfirmar],
+    escalar_humano_quando: [escalarHumanoQuando, setEscalarHumanoQuando],
+  };
+
+  function linhasParaLista(texto: string): string[] {
+    return texto
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+  }
 
   const salvarMutation = useMutation({
     mutationFn: atualizarConfiguracao,
@@ -81,14 +99,26 @@ function Configuracao() {
       queryClient.setQueryData(["configuracao"], dados);
       toast.success("Configuração salva.");
     },
-    onError: () => {
-      toast.error("Não foi possível salvar a configuração.");
+    onError: (err) => {
+      const status = statusDoErro(err);
+      if (status === 401) toast.error("Sem autorização — verifique a chave de API.");
+      else if (status === 400) toast.error("Dados inválidos — revise os campos.");
+      else if (status === 503 || status === null) toast.error("Backend fora do ar.");
+      else toast.error("Não foi possível salvar a configuração.");
     },
   });
 
   function salvar() {
     salvarMutation.mutate({
-      data: { persona, objetivo, tomDeVoz, contexto },
+      data: {
+        persona,
+        objetivo,
+        tomDeVoz,
+        contexto,
+        nao_prometer: linhasParaLista(naoPrometer),
+        sempre_confirmar: linhasParaLista(sempreConfirmar),
+        escalar_humano_quando: linhasParaLista(escalarHumanoQuando),
+      },
     });
   }
 
@@ -196,30 +226,27 @@ function Configuracao() {
             </div>
           </Secao>
 
-          {/* Regras (somente leitura: não editável via API) */}
+          {/* Regras */}
           <Secao icone={ShieldAlert} titulo="Regras da conversa" tabela="regras">
             <div className="space-y-4">
-              {REGRAS_CAMPOS.map(([chave, rotulo, ajuda]) => (
-                <div key={chave} className="space-y-2">
-                  <LabelComAjuda htmlFor={chave} texto={ajuda}>
-                    {rotulo}
-                  </LabelComAjuda>
-                  {regras && regras[chave].length > 0 ? (
-                    <ul className="list-disc space-y-1 rounded-lg border border-border bg-surface/60 p-3 pl-6 text-sm text-foreground">
-                      {regras[chave].map((item, i) => (
-                        <li key={i}>{item}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="rounded-lg border border-border bg-surface/60 p-3 text-sm text-muted-foreground">
-                      Nenhuma regra definida.
-                    </p>
-                  )}
-                </div>
-              ))}
-              <p className="text-xs text-muted-foreground">
-                Regras são definidas pela equipe técnica e exibidas aqui apenas para consulta.
-              </p>
+              {REGRAS_CAMPOS.map(([chave, rotulo, ajuda]) => {
+                const [valor, setValor] = regrasEditaveis[chave];
+                return (
+                  <div key={chave} className="space-y-2">
+                    <LabelComAjuda htmlFor={chave} texto={ajuda}>
+                      {rotulo}
+                    </LabelComAjuda>
+                    <Textarea
+                      id={chave}
+                      rows={4}
+                      value={valor}
+                      onChange={(e) => setValor(e.target.value)}
+                      placeholder="Uma regra por linha"
+                    />
+                  </div>
+                );
+              })}
+              <p className="text-xs text-muted-foreground">Uma regra por linha.</p>
             </div>
           </Secao>
         </div>

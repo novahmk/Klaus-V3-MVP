@@ -58,7 +58,13 @@ export interface ConsultaLeadsInput {
   limite?: number;
 }
 
-/** Espelha o objeto `agente` de `GET /api/config`. */
+/** Espelha o body aceito por `POST /api/leads/{id}/mensagens` (rota ainda não existe no backend). */
+export interface EnviarMensagemInput {
+  id: string;
+  conteudo: string;
+}
+
+/** Espelha o objeto `agente` retornado por `buscarConfiguracao` (fonte: Supabase `config_ia`). */
 export interface ConfiguracaoAgente {
   persona: string;
   objetivo: string;
@@ -78,10 +84,37 @@ export interface ConfiguracaoCarregada {
   regras: RegrasConversaReal;
 }
 
-/** Espelha o body aceito por `PUT /api/config`. */
+/**
+ * Espelha o body aceito por `PUT /api/config`.
+ *
+ * Os campos de `regras` ainda não são aceitos pelo backend hoje — a rota só
+ * processa persona/objetivo/tomDeVoz/contexto. Enviá-los é preparação para
+ * quando o backend passar a aceitá-los.
+ */
 export interface AtualizarConfiguracaoInput {
   persona?: string;
   objetivo?: string;
   tomDeVoz?: string;
   contexto?: string;
+  nao_prometer?: string[];
+  sempre_confirmar?: string[];
+  escalar_humano_quando?: string[];
+}
+
+/** Contato solto (ainda não é um `Lead`) enviado para disparo manual de prospecção. */
+export interface ItemProspeccao {
+  nome: string;
+  telefone: string;
+}
+
+/**
+ * Espelha o body aceito por `POST /api/prospeccao/manual-disparos` (rota ainda não
+ * existe no backend; contrato referenciado em `.lovable/plan/`). `clienteId` é
+ * preenchido no servidor do dashboard, nunca pelo cliente.
+ */
+export interface IniciarProspeccaoInput {
+  clienteId: string;
+  origem: "planilha" | "manual";
+  mensagem: string;
+  itens: ItemProspeccao[];
 }

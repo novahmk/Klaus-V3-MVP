@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useRef, useState } from "react";
 import {
   FileSpreadsheet,
   Plus,
@@ -12,7 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
-import { FaseBadge } from "@/components/fase-badge";
+import { EstagioBadge } from "@/components/estagio-badge";
 import { WhatsappPreview } from "@/components/whatsapp-preview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,15 +28,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  cadenciaPadrao,
-  filaInicial,
-  leads,
-  modelosMensagem,
-  FASES,
-  type ContatoFila,
-  type FaseLead,
-} from "@/lib/klaus-data";
+import { cadenciaPadrao, filaInicial, modelosMensagem, type ContatoFila } from "@/lib/klaus-data";
+import { iniciarProspeccao, listarLeads } from "@/lib/klaus-api.server";
+import { ESTAGIOS, rotuloEstagio, type Estagio } from "@/lib/klaus-types";
+import { ultimaInteracaoRelativa, statusDoErro } from "@/lib/utils";
+
+/** Sem paginação na UI por ora: 200 é o limite máximo aceito pela API. */
+const LIMITE_LEADS = 200;
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -59,13 +58,36 @@ export const Route = createFileRoute("/")({
 
 function Prospeccao() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [fila, setFila] = useState<ContatoFila[]>(filaInicial);
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
   const [modeloId, setModeloId] = useState(modelosMensagem[0]?.id ?? "t1");
   const [mensagem, setMensagem] = useState(modelosMensagem[0]?.mensagem ?? "");
   const [cadencia, setCadencia] = useState(cadenciaPadrao);
-  const [filtro, setFiltro] = useState<FaseLead | "todas">("todas");
+  const [filtro, setFiltro] = useState<Estagio | "todas">("todas");
+
+  const leadsQuery = useQuery({
+    queryKey: ["leads", { limite: LIMITE_LEADS }],
+    queryFn: () => listarLeads({ data: { limite: LIMITE_LEADS } }),
+  });
+
+  const iniciarProspeccaoMutation = useMutation({
+    mutationFn: iniciarProspeccao,
+    onSuccess: () => {
+      toast.success(`Prospecção iniciada para ${fila.length} contatos.`);
+      setFila([]);
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
+    },
+    onError: (err) => {
+      const status = statusDoErro(err);
+      if (status === 404) toast.error("Rota de prospecção ainda não disponível no backend.");
+      else if (status === 401) toast.error("Sem autorização — verifique a chave de API.");
+      else if (status === 503 || status === null) toast.error("Backend fora do ar.");
+      else toast.error("Não foi possível iniciar a prospecção.");
+    },
+  });
 
   const previa = useMemo(
     () => [
@@ -96,16 +118,18 @@ function Prospeccao() {
     [mensagem, fila],
   );
 
+  const leadsReais = useMemo(() => leadsQuery.data?.leads ?? [], [leadsQuery.data]);
+
   const contagens = useMemo(() => {
-    return FASES.map((f) => ({
-      ...f,
-      total: leads.filter((l) => l.fase === f.valor).length,
+    return ESTAGIOS.map((e) => ({
+      ...e,
+      total: leadsReais.filter((l) => l.estagio === e.valor).length,
     }));
-  }, []);
+  }, [leadsReais]);
 
   const disparados = useMemo(
-    () => (filtro === "todas" ? leads : leads.filter((l) => l.fase === filtro)),
-    [filtro],
+    () => (filtro === "todas" ? leadsReais : leadsReais.filter((l) => l.estagio === filtro)),
+    [filtro, leadsReais],
   );
 
   function adicionarManual() {
@@ -124,13 +148,57 @@ function Prospeccao() {
   }
 
   function importarPlanilha() {
-    toast.info("Importação de planilha ligada ao backend na próxima etapa.");
+    fileInputRef.current?.click();
+  }
+
+  /** Aceita apenas .csv com colunas Nome,Telefone (com ou sem cabeçalho). */
+  function processarCsv(texto: string) {
+    const linhas = texto
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    const novos: ContatoFila[] = [];
+    for (const linha of linhas) {
+      const colunas = linha.split(/[,;]/).map((c) => c.trim());
+      const nomeCol = colunas[0];
+      const telefoneCol = colunas[1] ?? "";
+      const digitos = telefoneCol.replace(/\D/g, "");
+      if (!nomeCol || digitos.length < 10) continue; // pula cabeçalho ou linha inválida
+      novos.push({
+        id: crypto.randomUUID(),
+        nome: nomeCol,
+        telefone: telefoneCol,
+        origem: "planilha",
+      });
+    }
+
+    if (novos.length === 0) {
+      toast.error("Nenhum contato válido encontrado na planilha.");
+      return;
+    }
+    setFila((f) => [...f, ...novos]);
+    toast.success(`${novos.length} contatos importados da planilha.`);
+  }
+
+  function arquivoSelecionado(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!arquivo) return;
+    arquivo
+      .text()
+      .then(processarCsv)
+      .catch(() => toast.error("Não foi possível ler o arquivo."));
   }
 
   function iniciar() {
-    toast.success(
-      `Prospecção iniciada para ${fila.length} contatos, a cada ${cadencia.intervalo_min_seg}–${cadencia.intervalo_max_seg}s.`,
-    );
+    iniciarProspeccaoMutation.mutate({
+      data: {
+        origem: fila.every((c) => c.origem === "planilha") ? "planilha" : "manual",
+        mensagem,
+        itens: fila.map((c) => ({ nome: c.nome, telefone: c.telefone })),
+      },
+    });
   }
 
   return (
@@ -142,7 +210,7 @@ function Prospeccao() {
           <Button
             onClick={iniciar}
             className="hidden shadow-glow lg:inline-flex"
-            disabled={fila.length === 0}
+            disabled={fila.length === 0 || iniciarProspeccaoMutation.isPending}
           >
             <Send /> Iniciar prospecção
           </Button>
@@ -170,11 +238,18 @@ function Prospeccao() {
                   <div className="mb-4 grid size-12 place-items-center rounded-full bg-secondary transition-colors group-hover:bg-primary/20">
                     <FileSpreadsheet className="size-6 text-muted-foreground group-hover:text-primary" />
                   </div>
-                  <p className="font-medium text-foreground">Importar planilha (.csv ou .xlsx)</p>
+                  <p className="font-medium text-foreground">Importar planilha (.csv)</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Colunas esperadas: Nome e Telefone
                   </p>
                 </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={arquivoSelecionado}
+                  className="hidden"
+                />
 
                 <div className="mt-6 space-y-3">
                   <p className="text-sm font-medium text-muted-foreground">Ou adicione um a um</p>
@@ -284,7 +359,9 @@ function Prospeccao() {
               <section className="rounded-2xl border border-border bg-panel p-5 sm:p-6">
                 <div className="mb-5 flex items-center gap-2">
                   <Timer className="size-5 shrink-0 text-primary" />
-                  <h2 className="text-lg font-semibold text-foreground">Cadência e aleatoriedade</h2>
+                  <h2 className="text-lg font-semibold text-foreground">
+                    Cadência e aleatoriedade
+                  </h2>
                 </div>
 
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -436,19 +513,23 @@ function Prospeccao() {
                   <tr className="bg-surface/40 text-left text-xs tracking-wider text-muted-foreground uppercase">
                     <th className="px-5 py-3 font-semibold">Lead</th>
                     <th className="px-5 py-3 font-semibold">Telefone</th>
-                    <th className="px-5 py-3 font-semibold">Disparado em</th>
-                    <th className="px-5 py-3 font-semibold">Fase</th>
+                    <th className="px-5 py-3 font-semibold">Última interação</th>
+                    <th className="px-5 py-3 font-semibold">Estágio</th>
                     <th className="px-5 py-3 font-semibold"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {disparados.map((l) => (
                     <tr key={l.id} className="transition-colors hover:bg-secondary/30">
-                      <td className="px-5 py-4 text-sm font-medium text-foreground">{l.nome}</td>
+                      <td className="px-5 py-4 text-sm font-medium text-foreground">
+                        {l.nome ?? l.telefone}
+                      </td>
                       <td className="px-5 py-4 text-sm text-muted-foreground">{l.telefone}</td>
-                      <td className="px-5 py-4 text-sm text-muted-foreground">{l.disparado_em}</td>
+                      <td className="px-5 py-4 text-sm text-muted-foreground">
+                        {ultimaInteracaoRelativa(l.ultima_interacao)}
+                      </td>
                       <td className="px-5 py-4">
-                        <FaseBadge fase={l.fase} />
+                        <EstagioBadge estagio={l.estagio} />
                       </td>
                       <td className="px-5 py-4 text-right">
                         <Button
@@ -472,12 +553,16 @@ function Prospeccao() {
                   <li key={l.id} className="space-y-2 p-4">
                     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{l.nome}</p>
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {l.nome ?? l.telefone}
+                        </p>
                         <p className="truncate text-xs text-muted-foreground">{l.telefone}</p>
                       </div>
-                      <FaseBadge fase={l.fase} />
+                      <EstagioBadge estagio={l.estagio} />
                     </div>
-                    <p className="text-xs text-muted-foreground">Disparado {l.disparado_em}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {ultimaInteracaoRelativa(l.ultima_interacao)}
+                    </p>
                     <Button
                       variant="secondary"
                       size="sm"
@@ -496,7 +581,11 @@ function Prospeccao() {
 
       {/* Ação principal fixa no celular */}
       <div className="fixed inset-x-0 bottom-16 z-30 border-t border-border bg-sidebar/95 p-3 backdrop-blur lg:hidden">
-        <Button onClick={iniciar} className="w-full" disabled={fila.length === 0}>
+        <Button
+          onClick={iniciar}
+          className="w-full"
+          disabled={fila.length === 0 || iniciarProspeccaoMutation.isPending}
+        >
           <Send /> Iniciar prospecção ({fila.length})
         </Button>
       </div>

@@ -1,9 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { Bot, MessageSquare, Search, UserCheck, X } from "lucide-react";
+import { Bot, MessageSquare, Search, Send, UserCheck, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
@@ -11,8 +9,15 @@ import { EstagioBadge } from "@/components/estagio-badge";
 import { WhatsappPreview } from "@/components/whatsapp-preview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { definirControleManual, listarLeads, listarMensagens } from "@/lib/klaus-api.server";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  definirControleManual,
+  enviarMensagem,
+  listarLeads,
+  listarMensagens,
+} from "@/lib/klaus-api.server";
 import { ESTAGIOS, type LeadReal } from "@/lib/klaus-types";
+import { ultimaInteracaoRelativa, statusDoErro } from "@/lib/utils";
 
 type Busca = { lead?: string };
 
@@ -40,21 +45,12 @@ export const Route = createFileRoute("/kanban")({
   component: Kanban,
 });
 
-function ultimaInteracaoRelativa(iso: string | null): string {
-  if (iso === null) return "Sem interação registrada";
-
-  try {
-    return `há ${formatDistanceToNow(new Date(iso), { locale: ptBR })}`;
-  } catch {
-    return "Sem interação registrada";
-  }
-}
-
 function Kanban() {
   const { lead: leadBuscado } = Route.useSearch();
   const navigate = useNavigate({ from: "/kanban" });
   const queryClient = useQueryClient();
   const [termo, setTermo] = useState("");
+  const [resposta, setResposta] = useState("");
 
   const leadsQuery = useQuery({
     queryKey: ["leads", { limite: LIMITE_LEADS }],
@@ -72,8 +68,28 @@ function Kanban() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["leads"] });
     },
-    onError: () => {
-      toast.error("Não foi possível atualizar o controle da conversa.");
+    onError: (err) => {
+      const status = statusDoErro(err);
+      if (status === 404) toast.error("Lead não encontrado.");
+      else if (status === 401) toast.error("Sem autorização — verifique a chave de API.");
+      else if (status === 503 || status === null) toast.error("Backend fora do ar.");
+      else toast.error("Não foi possível atualizar o controle da conversa.");
+    },
+  });
+
+  const enviarMensagemMutation = useMutation({
+    mutationFn: enviarMensagem,
+    onSuccess: () => {
+      setResposta("");
+      void queryClient.invalidateQueries({ queryKey: ["lead-mensagens", leadBuscado] });
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
+    },
+    onError: (err) => {
+      const status = statusDoErro(err);
+      if (status === 404) toast.error("Envio de mensagens ainda não disponível no backend.");
+      else if (status === 401) toast.error("Sem autorização — verifique a chave de API.");
+      else if (status === 503 || status === null) toast.error("Backend fora do ar.");
+      else toast.error("Não foi possível enviar a mensagem.");
     },
   });
 
@@ -107,6 +123,12 @@ function Kanban() {
         },
       },
     );
+  }
+
+  function enviar(l: LeadReal) {
+    const conteudo = resposta.trim();
+    if (!conteudo) return;
+    enviarMensagemMutation.mutate({ data: { id: l.id, conteudo } });
   }
 
   if (leadsQuery.isError) {
@@ -225,7 +247,37 @@ function Kanban() {
               />
             </div>
 
-            <div className="border-t border-border p-4">
+            <div className="space-y-3 border-t border-border p-4">
+              {selecionado.controle_manual ? (
+                <div className="flex items-end gap-2">
+                  <Textarea
+                    rows={2}
+                    placeholder="Escreva uma resposta..."
+                    value={resposta}
+                    onChange={(e) => setResposta(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        enviar(selecionado);
+                      }
+                    }}
+                    className="flex-1 resize-none"
+                  />
+                  <Button
+                    size="icon"
+                    className="shrink-0"
+                    disabled={enviarMensagemMutation.isPending || resposta.trim().length === 0}
+                    onClick={() => enviar(selecionado)}
+                    aria-label="Enviar mensagem"
+                  >
+                    <Send />
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-center text-xs text-muted-foreground">
+                  Assuma a conversa para responder pelo dashboard.
+                </p>
+              )}
               <Button
                 className="w-full"
                 variant={selecionado.controle_manual ? "secondary" : "default"}
