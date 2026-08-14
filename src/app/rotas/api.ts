@@ -239,14 +239,20 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
 
               leadId = lead.id;
             } else if (target.phone !== undefined) {
-              const leads = await deps.persistencia.cliente.selecionarTodos('leads', {
+              const leads = await deps.persistencia.cliente.selecionarTodos<{ id: string }>('leads', {
                 telefone: target.phone,
               });
 
               if (leads.length > 0) {
-                leadId = leads[0].id;
-              } else {
-                const novoLead = await deps.persistencia.cliente.inserirUm('leads', {
+                const leadExistente = leads[0];
+
+                if (leadExistente !== undefined) {
+                  leadId = leadExistente.id;
+                }
+              }
+
+              if (leadId === null) {
+                const novoLead = await deps.persistencia.cliente.inserirUm<{ id: string }>('leads', {
                   telefone: target.phone,
                   estagio: 'novo',
                   criado_em: agora,
