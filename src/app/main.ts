@@ -8,16 +8,6 @@ import { TravaDistribuidaSupabase } from '../infra/database/trava-supabase.js';
 import { FilaMemoria } from '../infra/filas/fila-memoria.js';
 import { Trabalhador } from '../infra/filas/trabalhador.js';
 import { TravaPorChave } from '../infra/resiliencia/travas.js';
-
-process.on('uncaughtException', (erro) => {
-  console.error('[DIAG] uncaughtException:', erro instanceof Error ? erro.stack ?? erro.message : String(erro));
-});
-process.on('unhandledRejection', (erro) => {
-  console.error('[DIAG] unhandledRejection:', erro instanceof Error ? erro.stack ?? erro.message : String(erro));
-});
-process.on('SIGTERM', () => console.error('[DIAG] recebeu SIGTERM'));
-process.on('SIGINT', () => console.error('[DIAG] recebeu SIGINT'));
-process.on('exit', (codigo) => console.error('[DIAG] processo saindo, codigo=', codigo));
 import { comTimeout } from '../infra/resiliencia/timeout.js';
 import { ClienteWaSender } from '../integrations/wasender/index.js';
 import type { MensagemRecebida } from '../integrations/wasender/index.js';
@@ -39,19 +29,15 @@ const INTERVALO_FOLLOWUP_MS = 15 * 60 * 1000;
  * Todo o resto do sistema fala com portas.
  */
 async function main(): Promise<void> {
-  console.log('[DIAG] main() iniciado, pid=', process.pid);
   const ambiente = carregarAmbiente();
-  console.log('[DIAG] ambiente carregado, port=', ambiente.port);
   const {
     client: clienteSupabase,
     cliente,
     leitorSchema,
   } = criarClientes(ambiente.supabaseUrl, ambiente.supabaseServiceKey);
-  console.log('[DIAG] clientes supabase criados');
 
   // Ambiente válido e schema compatível antes de aceitar qualquer tráfego.
   await iniciar({ cliente, leitorSchema });
-  console.log('[DIAG] iniciar() concluído, schema ok');
 
   const persistencia = { cliente };
   const whatsapp = new ClienteWaSender({ apiKey: ambiente.wasenderApiKey });
@@ -111,7 +97,6 @@ async function main(): Promise<void> {
 
   // 0.0.0.0 é obrigatório no Railway: localhost não recebe tráfego externo.
   await app.listen({ port: ambiente.port, host: '0.0.0.0' });
-  console.log('[DIAG] app.listen() concluído, servidor no ar na porta', ambiente.port);
 
   // Ciclo de follow-up. A trava impede disparo duplicado caso um dia rode
   // com mais de uma instância.
