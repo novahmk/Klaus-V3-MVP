@@ -37,7 +37,7 @@ async function main(): Promise<void> {
   } = criarClientes(ambiente.supabaseUrl, ambiente.supabaseServiceKey);
 
   // Ambiente válido e schema compatível antes de aceitar qualquer tráfego.
-  await iniciar({ cliente, leitorSchema });
+  await iniciar({ cliente, leitorSchema, client: clienteSupabase });
 
   const persistencia = { cliente };
   const whatsapp = new ClienteWaSender({ apiKey: ambiente.wasenderApiKey });
