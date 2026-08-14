@@ -45,6 +45,8 @@ export interface Lead {
   controle_manual: boolean;
   ultima_mensagem: string | null;
   ultima_interacao: string | null;
+  /** Estágio do playbook (ver `dominio/playbook/estagios.ts`). Coluna sempre presente no banco. */
+  estagio: string;
 }
 
 export type DirecaoMensagem = 'entrada' | 'saida';
