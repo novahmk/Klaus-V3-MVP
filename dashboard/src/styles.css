@@ -1,0 +1,204 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Klaus AI — design tokens.
+ * Padrão: tema claro/branco. O modo escuro é ativado pela classe .dark no <html>.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-panel: var(--panel);
+  --color-panel-strong: var(--panel-strong);
+  --color-surface: var(--surface);
+  --color-wa-bg: var(--wa-bg);
+  --color-wa-panel: var(--wa-panel);
+  --color-wa-out: var(--wa-out);
+  --color-wa-in: var(--wa-in);
+  --color-wa-input: var(--wa-input);
+  --color-wa-muted: var(--wa-muted);
+  --color-fase-andamento: var(--fase-andamento);
+  --color-fase-qualificado: var(--fase-qualificado);
+  --color-fase-finalizado: var(--fase-finalizado);
+  --color-fase-sem-resposta: var(--fase-sem-resposta);
+  --color-fase-followup: var(--fase-followup);
+  --color-estagio-abertura: var(--estagio-abertura);
+  --color-estagio-descoberta: var(--estagio-descoberta);
+  --color-estagio-qualificacao: var(--estagio-qualificacao);
+  --color-estagio-objecao: var(--estagio-objecao);
+  --color-estagio-handoff: var(--estagio-handoff);
+  --color-estagio-followup: var(--estagio-followup);
+  --color-estagio-encerrado: var(--estagio-encerrado);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --shadow-glow: 0 0 20px color-mix(in oklab, var(--primary) 22%, transparent);
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* TEMA CLARO (padrão) */
+  --background: oklch(0.985 0.001 247.858);
+  --foreground: oklch(0.22 0.02 252.894);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 252.894);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 252.894);
+  --primary: oklch(0.55 0.16 162.48);
+  --primary-foreground: oklch(0.985 0.001 247.858);
+  --secondary: oklch(0.94 0.01 252.894);
+  --secondary-foreground: oklch(0.35 0.03 252.894);
+  --muted: oklch(0.94 0.01 252.894);
+  --muted-foreground: oklch(0.55 0.04 256.788);
+  --accent: oklch(0.94 0.01 252.894);
+  --accent-foreground: oklch(0.22 0.02 252.894);
+  --destructive: oklch(0.58 0.2 22.216);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.88 0.01 252.894);
+  --input: oklch(0.9 0.01 252.894);
+  --ring: oklch(0.55 0.16 162.48);
+
+  /* superfícies do console */
+  --panel: color-mix(in oklab, oklch(1 0 0) 70%, oklch(0.92 0.01 252.894));
+  --panel-strong: oklch(0.97 0.01 252.894);
+  --surface: oklch(0.94 0.01 252.894);
+
+  /* prévia WhatsApp (modo claro) */
+  --wa-bg: oklch(0.92 0.01 235.5);
+  --wa-panel: oklch(1 0 0);
+  --wa-out: oklch(0.88 0.06 168.5);
+  --wa-in: oklch(1 0 0);
+  --wa-input: oklch(0.94 0.01 235.5);
+  --wa-muted: oklch(0.55 0.04 235.5);
+
+  /* fases do funil (mock — usado só pela tela de Prospecção) */
+  --fase-andamento: oklch(0.55 0.16 254.624);
+  --fase-qualificado: oklch(0.5 0.16 163.223);
+  --fase-finalizado: oklch(0.55 0.04 256.788);
+  --fase-sem-resposta: oklch(0.55 0.16 17.5);
+  --fase-followup: oklch(0.65 0.16 84.429);
+
+  /* estágios reais do playbook (Kanban) */
+  --estagio-abertura: oklch(0.55 0.16 254.624);
+  --estagio-descoberta: oklch(0.55 0.14 300);
+  --estagio-qualificacao: oklch(0.5 0.16 163.223);
+  --estagio-objecao: oklch(0.6 0.15 55);
+  --estagio-handoff: oklch(0.58 0.19 25);
+  --estagio-followup: oklch(0.65 0.16 84.429);
+  --estagio-encerrado: oklch(0.55 0.04 256.788);
+
+  --sidebar: oklch(0.97 0.01 252.894);
+  --sidebar-foreground: oklch(0.35 0.03 252.894);
+  --sidebar-primary: oklch(0.55 0.16 162.48);
+  --sidebar-primary-foreground: oklch(0.985 0.001 247.858);
+  --sidebar-accent: oklch(0.94 0.01 252.894);
+  --sidebar-accent-foreground: oklch(0.22 0.02 252.894);
+  --sidebar-border: oklch(0.88 0.01 252.894);
+  --sidebar-ring: oklch(0.55 0.16 162.48);
+}
+
+.dark {
+  /* TEMA ESCURO (console) */
+  --background: oklch(0.07 0 0);
+  --foreground: oklch(0.869 0.022 252.894);
+  --card: oklch(0.208 0.042 265.755);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.696 0.17 162.48);
+  --primary-foreground: oklch(0.129 0.042 264.695);
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --border: oklch(0.279 0.041 260.031);
+  --input: oklch(0.372 0.044 257.287);
+  --ring: oklch(0.696 0.17 162.48);
+
+  --panel: color-mix(in oklab, oklch(0.208 0.042 265.755) 50%, transparent);
+  --panel-strong: color-mix(in oklab, oklch(0.208 0.042 265.755) 80%, transparent);
+  --surface: oklch(0.129 0.042 264.695);
+
+  --wa-bg: oklch(0.196 0.017 235.5);
+  --wa-panel: oklch(0.262 0.017 235.5);
+  --wa-out: oklch(0.363 0.077 168.5);
+  --wa-in: oklch(0.262 0.017 235.5);
+  --wa-input: oklch(0.311 0.017 235.5);
+  --wa-muted: oklch(0.748 0.014 235.5);
+
+  --fase-andamento: oklch(0.707 0.165 254.624);
+  --fase-qualificado: oklch(0.765 0.177 163.223);
+  --fase-finalizado: oklch(0.704 0.04 256.788);
+  --fase-sem-resposta: oklch(0.712 0.166 17.5);
+  --fase-followup: oklch(0.828 0.189 84.429);
+
+  --estagio-abertura: oklch(0.707 0.165 254.624);
+  --estagio-descoberta: oklch(0.72 0.15 300);
+  --estagio-qualificacao: oklch(0.765 0.177 163.223);
+  --estagio-objecao: oklch(0.75 0.15 55);
+  --estagio-handoff: oklch(0.712 0.19 25);
+  --estagio-followup: oklch(0.828 0.189 84.429);
+  --estagio-encerrado: oklch(0.704 0.04 256.788);
+
+  --sidebar: oklch(0.129 0.042 264.695);
+  --sidebar-foreground: oklch(0.869 0.022 252.894);
+  --sidebar-primary: oklch(0.696 0.17 162.48);
+  --sidebar-primary-foreground: oklch(0.129 0.042 264.695);
+  --sidebar-accent: oklch(0.279 0.041 260.031);
+  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-border: oklch(0.279 0.041 260.031);
+  --sidebar-ring: oklch(0.696 0.17 162.48);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
