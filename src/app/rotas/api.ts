@@ -3,12 +3,21 @@ import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 
 import {
+  DIRECAO_SAIDA,
+  TABELA_LEADS,
+  TABELA_MENSAGENS,
   buscarLeadPorId,
+  buscarLeadPorTelefone,
   definirControleManualPorId,
   listarLeads,
   listarMensagensDoLead,
+  normalizarTelefone,
 } from '../../infra/persistencia/index.js';
-import type { PersistenciaDependencies } from '../../infra/persistencia/index.js';
+import type {
+  Lead,
+  MensagemPersistida,
+  PersistenciaDependencies,
+} from '../../infra/persistencia/index.js';
 import { TABELA_CONFIG_IA } from '../adaptadores/configuracao.js';
 import type { ProvedorConfiguracaoSupabase } from '../adaptadores/configuracao.js';
 
@@ -151,6 +160,9 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
             objetivo: { type: 'string', minLength: 1, maxLength: 2000 },
             tomDeVoz: { type: 'string', maxLength: 2000 },
             contexto: { type: 'string', maxLength: 4000 },
+            nao_prometer: { type: 'array', items: { type: 'string' } },
+            sempre_confirmar: { type: 'array', items: { type: 'string' } },
+            escalar_humano_quando: { type: 'array', items: { type: 'string' } },
           },
           additionalProperties: false,
         },
@@ -162,6 +174,9 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
         objetivo?: string;
         tomDeVoz?: string;
         contexto?: string;
+        nao_prometer?: string[];
+        sempre_confirmar?: string[];
+        escalar_humano_quando?: string[];
       };
 
       const valores: Record<string, unknown> = { atualizado_em: new Date().toISOString() };
@@ -182,6 +197,18 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
         valores['contexto'] = corpo.contexto;
       }
 
+      if (corpo.nao_prometer !== undefined) {
+        valores['nao_prometer'] = corpo.nao_prometer;
+      }
+
+      if (corpo.sempre_confirmar !== undefined) {
+        valores['sempre_confirmar'] = corpo.sempre_confirmar;
+      }
+
+      if (corpo.escalar_humano_quando !== undefined) {
+        valores['escalar_humano_quando'] = corpo.escalar_humano_quando;
+      }
+
       // O singleton tem id fixo = 1 (ver migration 0004).
       await deps.persistencia.cliente.atualizarPorId(TABELA_CONFIG_IA, '1', valores);
 
@@ -189,6 +216,111 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
       deps.configuracao.invalidar();
 
       return deps.configuracao.carregar();
+    },
+  );
+
+  app.post(
+    `${PREFIXO_API}/leads/:id/mensagens`,
+    {
+      schema: {
+        params: PARAMS_LEAD,
+        body: {
+          type: 'object',
+          required: ['conteudo'],
+          properties: { conteudo: { type: 'string', minLength: 1, maxLength: 4000 } },
+        },
+      },
+    },
+    async (requisicao, resposta) => {
+      const { id } = requisicao.params as { id: string };
+      const { conteudo } = requisicao.body as { conteudo: string };
+
+      const lead = await buscarLeadPorId(deps.persistencia, id);
+
+      if (lead === null) {
+        return resposta.status(404).send({ erro: 'Lead não encontrado.' });
+      }
+
+      const agora = new Date().toISOString();
+
+      const mensagem = await deps.persistencia.cliente.inserirUm<MensagemPersistida>(
+        TABELA_MENSAGENS,
+        {
+          lead_id: id,
+          direcao: DIRECAO_SAIDA,
+          conteudo,
+          criado_em: agora,
+        },
+      );
+
+      return resposta.status(201).send({
+        id: mensagem.id,
+        lead_id: mensagem.lead_id,
+        conteudo: mensagem.conteudo,
+        criado_em: mensagem.criado_em,
+      });
+    },
+  );
+
+  app.post(
+    `${PREFIXO_API}/prospeccao/manual-disparos`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['telefones', 'conteudo'],
+          properties: {
+            telefones: {
+              type: 'array',
+              minItems: 1,
+              items: { type: 'string', minLength: 1 },
+            },
+            conteudo: { type: 'string', minLength: 1, maxLength: 4000 },
+          },
+        },
+      },
+    },
+    async (requisicao, resposta) => {
+      const { telefones, conteudo } = requisicao.body as {
+        telefones: string[];
+        conteudo: string;
+      };
+
+      try {
+        const telefonesProcessados: string[] = [];
+
+        for (const telefoneOriginal of telefones) {
+          const telefone = normalizarTelefone(telefoneOriginal);
+
+          let lead: Lead | null = await buscarLeadPorTelefone(deps.persistencia, telefone);
+
+          if (lead === null) {
+            lead = await deps.persistencia.cliente.inserirUm<Lead>(TABELA_LEADS, {
+              telefone,
+              estagio: 'novo',
+              controle_manual: false,
+            });
+          }
+
+          await deps.persistencia.cliente.inserirUm<MensagemPersistida>(TABELA_MENSAGENS, {
+            lead_id: lead.id,
+            direcao: DIRECAO_SAIDA,
+            conteudo,
+            criado_em: new Date().toISOString(),
+          });
+
+          telefonesProcessados.push(telefone);
+        }
+
+        return resposta.status(200).send({
+          disparados: telefonesProcessados.length,
+          telefones_processados: telefonesProcessados,
+        });
+      } catch (erro) {
+        const mensagemErro = erro instanceof Error ? erro.message : 'Falha ao processar disparos.';
+
+        return resposta.status(400).send({ erro: mensagemErro });
+      }
     },
   );
 }
