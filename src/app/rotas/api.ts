@@ -199,7 +199,7 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
                 properties: {
                   lead_id: { type: 'string', format: 'uuid' },
                   phone: { type: 'string' },
-                  message: { type: 'string', minLength: 1, maxLength: 5000 },
+                  message: { type: 'string', maxLength: 5000 },
                 },
                 additionalProperties: false,
               },
@@ -218,6 +218,10 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
       };
 
       if (Array.isArray(corpo.targets) && corpo.targets.length > 0) {
+        if (deps.enviar === undefined) {
+          return resposta.status(503).send({ erro: 'Cliente de envio não configurado.' });
+        }
+
         const resultados: Array<{ lead_id?: string; phone?: string; status: string }> = [];
         const agora = new Date().toISOString();
 
@@ -267,6 +271,11 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
             if (leadId === null) {
               resultados.push({ phone: target.phone, status: 'error' });
               continue;
+            }
+
+            const telefone = target.phone ?? (await buscarLeadPorId(deps.persistencia, leadId))?.telefone;
+            if (telefone !== undefined) {
+              await deps.enviar(telefone, message);
             }
 
             await deps.persistencia.cliente.inserirUm('mensagens', {

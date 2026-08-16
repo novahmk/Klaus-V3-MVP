@@ -144,11 +144,14 @@ export async function executarCicloFollowup(
 
       try {
         await deps.enviar(lead.telefone, modelo.mensagem);
-        await registrarMensagem(deps.persistencia, {
-          telefone: lead.telefone,
-          direcao: 'saida',
-          conteudo: modelo.mensagem,
-        });
+        await registrarMensagem(
+          { ...deps.persistencia, agora: deps.agora, logger: deps.logger },
+          {
+            telefone: lead.telefone,
+            direcao: 'saida',
+            conteudo: modelo.mensagem,
+          },
+        );
 
         enviados += 1;
       } catch (erro) {

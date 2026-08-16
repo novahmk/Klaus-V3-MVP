@@ -58,11 +58,12 @@ function criarDeps(
   cliente: ClienteMemoria,
   enviar = vi.fn().mockResolvedValue(undefined),
 ): DependenciasFollowup & { enviar: ReturnType<typeof vi.fn> } {
+  const agora = () => AGORA;
   return {
-    persistencia: { cliente },
+    persistencia: { cliente, agora },
     trava: new TravaDistribuidaMemoria(),
     enviar,
-    agora: () => AGORA,
+    agora,
   };
 }
 
@@ -141,9 +142,11 @@ describe('executarCicloFollowup', () => {
     // atualiza `ultima_interacao` e reinicia a contagem do intervalo.
     // 17/08/2026 é segunda — 15 e 16 caem no fim de semana, que é bloqueado.
     const proximaSegunda = new Date(2026, 7, 17, 10, 0, 0);
+    const deps = criarDeps(cliente, enviar);
     await executarCicloFollowup({
-      ...criarDeps(cliente, enviar),
+      ...deps,
       agora: () => proximaSegunda,
+      persistencia: { ...deps.persistencia, agora: () => proximaSegunda },
     });
 
     expect(enviar).toHaveBeenNthCalledWith(2, '5511999998888', 'Posso ajudar em algo?');
@@ -167,9 +170,12 @@ describe('executarCicloFollowup', () => {
     const dias = [12, 17, 20, 24];
 
     for (const dia of dias) {
+      const deps = criarDeps(cliente, enviar);
+      const agoraFn = () => new Date(2026, 7, dia, 10, 0, 0);
       await executarCicloFollowup({
-        ...criarDeps(cliente, enviar),
-        agora: () => new Date(2026, 7, dia, 10, 0, 0),
+        ...deps,
+        agora: agoraFn,
+        persistencia: { ...deps.persistencia, agora: agoraFn },
       });
     }
 
@@ -198,9 +204,11 @@ describe('executarCicloFollowup', () => {
 
   it('não envia fora da janela de horário', async () => {
     const cliente = criarCliente([lead()]);
-    const deps = { ...criarDeps(cliente), agora: () => new Date(2026, 7, 12, 22, 0, 0) };
+    const deps = criarDeps(cliente);
+    const agoraFn = () => new Date(2026, 7, 12, 22, 0, 0);
+    const depsComHorario = { ...deps, agora: agoraFn, persistencia: { ...deps.persistencia, agora: agoraFn } };
 
-    const resultado = await executarCicloFollowup(deps);
+    const resultado = await executarCicloFollowup(depsComHorario);
 
     expect(resultado.executou).toBe(false);
     expect(resultado.motivo).toContain('janela');
@@ -209,9 +217,10 @@ describe('executarCicloFollowup', () => {
   it('não envia no fim de semana quando configurado', async () => {
     const cliente = criarCliente([lead()]);
     const domingo = new Date(2026, 7, 16, 10, 0, 0);
-    const deps = { ...criarDeps(cliente), agora: () => domingo };
+    const deps = criarDeps(cliente);
+    const depsComDomingo = { ...deps, agora: () => domingo, persistencia: { ...deps.persistencia, agora: () => domingo } };
 
-    const resultado = await executarCicloFollowup(deps);
+    const resultado = await executarCicloFollowup(depsComDomingo);
 
     expect(resultado.executou).toBe(false);
   });
@@ -246,9 +255,12 @@ describe('executarCicloFollowup', () => {
     const enviar = vi.fn().mockRejectedValueOnce(new Error('falha')).mockResolvedValue(undefined);
 
     await executarCicloFollowup(criarDeps(cliente, enviar));
+    const deps = criarDeps(cliente, enviar);
+    const agoraFn = () => new Date(2026, 7, 17, 10, 0, 0);
     await executarCicloFollowup({
-      ...criarDeps(cliente, enviar),
-      agora: () => new Date(2026, 7, 17, 10, 0, 0),
+      ...deps,
+      agora: agoraFn,
+      persistencia: { ...deps.persistencia, agora: agoraFn },
     });
 
     expect(enviar).toHaveBeenNthCalledWith(2, '5511999998888', 'Posso ajudar em algo?');

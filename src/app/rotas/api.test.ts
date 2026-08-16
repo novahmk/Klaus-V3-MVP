@@ -28,7 +28,7 @@ function leitorValido(): LeitorSchema {
   return { listarColunas: () => Promise.resolve(colunas) };
 }
 
-function criarApp(opcoes: { enviar?: (telefone: string, texto: string) => Promise<void> } = {}) {
+function criarApp(opcoes: { enviar?: ((telefone: string, texto: string) => Promise<void>) | null } = {}) {
   const cliente = new ClienteMemoria({
     [TABELA_LEADS]: [
       {
@@ -61,6 +61,8 @@ function criarApp(opcoes: { enviar?: (telefone: string, texto: string) => Promis
     [TABELA_REGRAS_CONVERSA]: [],
   });
 
+  const enviar = opcoes.enviar === null ? undefined : (opcoes.enviar ?? (() => Promise.resolve()));
+
   const app = criarServidor({
     cliente,
     leitorSchema: leitorValido(),
@@ -68,7 +70,7 @@ function criarApp(opcoes: { enviar?: (telefone: string, texto: string) => Promis
       chaveInterna: CHAVE,
       persistencia: { cliente },
       configuracao: new ProvedorConfiguracaoSupabase({ cliente }),
-      enviar: opcoes.enviar ?? (() => Promise.resolve()),
+      enviar,
     },
   });
 
@@ -394,6 +396,141 @@ describe('envio manual de mensagem do lead', () => {
 
     expect(resposta.statusCode).toBe(400);
     expect(enviar).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+});
+
+describe('POST /api/prospeccao/manual-disparos com targets', () => {
+  it('envia WhatsApp e registra mensagem para cada target', async () => {
+    const enviar = vi.fn().mockResolvedValue(undefined);
+    const { app, cliente } = criarApp({ enviar });
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: '/api/prospeccao/manual-disparos',
+      headers: auth,
+      payload: {
+        targets: [
+          { lead_id: LEAD_ID, message: 'Olá, tudo bem?' },
+          { phone: '5511999997777', message: 'Mensagem para contato novo' },
+        ],
+      },
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(enviar).toHaveBeenCalledTimes(2);
+    expect(enviar).toHaveBeenCalledWith('5511999998888', 'Olá, tudo bem?');
+    expect(enviar).toHaveBeenCalledWith('5511999997777', 'Mensagem para contato novo');
+
+    const mensagens = cliente.linhas(TABELA_MENSAGENS);
+    expect(mensagens.length).toBeGreaterThanOrEqual(2);
+    
+    const mensagensEnviadas = mensagens.filter((m) => m.direcao === 'saida');
+    expect(mensagensEnviadas).toHaveLength(2);
+    expect(mensagensEnviadas[0]).toMatchObject({
+      lead_id: LEAD_ID,
+      conteudo: 'Olá, tudo bem?',
+      direcao: 'saida',
+    });
+
+    await app.close();
+  });
+
+  it('cria novo lead para telefone desconhecido', async () => {
+    const enviar = vi.fn().mockResolvedValue(undefined);
+    const { app, cliente } = criarApp({ enviar });
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: '/api/prospeccao/manual-disparos',
+      headers: auth,
+      payload: {
+        targets: [{ phone: '5511888888888', message: 'Primeira mensagem' }],
+      },
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(enviar).toHaveBeenCalledWith('5511888888888', 'Primeira mensagem');
+
+    const leads = cliente.linhas(TABELA_LEADS);
+    const novoLead = leads.find((l) => l.telefone === '5511888888888');
+    expect(novoLead).toBeDefined();
+    expect(novoLead?.estagio).toBe('novo');
+
+    await app.close();
+  });
+
+  it('retorna 503 se deps.enviar não está definido', async () => {
+    const { app } = criarApp({ enviar: null });
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: '/api/prospeccao/manual-disparos',
+      headers: auth,
+      payload: {
+        targets: [{ phone: '5511999999999', message: 'Teste' }],
+      },
+    });
+
+    expect(resposta.statusCode).toBe(503);
+
+    await app.close();
+  });
+
+  it('ignora mensagens vazias', async () => {
+    const enviar = vi.fn().mockResolvedValue(undefined);
+    const { app } = criarApp({ enviar });
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: '/api/prospeccao/manual-disparos',
+      headers: auth,
+      payload: {
+        targets: [
+          { lead_id: LEAD_ID, message: '   ' },
+          { phone: '5511999997777', message: '' },
+        ],
+      },
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(enviar).not.toHaveBeenCalled();
+
+    const body = JSON.parse(resposta.body);
+    expect(body.queued_count).toBe(0);
+
+    await app.close();
+  });
+
+  it('continua processando se um envio falhar', async () => {
+    const enviar = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('Falha no envio'))
+      .mockResolvedValueOnce(undefined);
+
+    const { app } = criarApp({ enviar });
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: '/api/prospeccao/manual-disparos',
+      headers: auth,
+      payload: {
+        targets: [
+          { phone: '5511111111111', message: 'Mensagem 1' },
+          { phone: '5511222222222', message: 'Mensagem 2' },
+          { phone: '5511333333333', message: 'Mensagem 3' },
+        ],
+      },
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(enviar).toHaveBeenCalledTimes(3);
+
+    const body = JSON.parse(resposta.body);
+    expect(body.results).toHaveLength(3);
+    expect(body.results.filter((r: { status: string }) => r.status === 'error')).toHaveLength(1);
 
     await app.close();
   });
