@@ -182,11 +182,7 @@ export type ContatoFila = {
   origem: "planilha" | "manual";
 };
 
-export const filaInicial: ContatoFila[] = [
-  { id: "f1", nome: "Bruno Tavares", telefone: "+55 11 98812-3344", origem: "planilha" },
-  { id: "f2", nome: "Letícia Amaral", telefone: "+55 19 99771-2020", origem: "planilha" },
-  { id: "f3", nome: "Diego Fontes", telefone: "+55 41 98444-9090", origem: "manual" },
-];
+export const filaInicial: ContatoFila[] = [];
 
 /** cfg_ia_persona / cfg_ia_tom_voz */
 export const cfgIaPersona = {
