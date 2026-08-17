@@ -32,9 +32,19 @@ function criarDeps(
   };
 }
 
-function clienteVazio(): ClienteMemoria {
+const TELEFONE_INICIADO = '5511999998888';
+
+function clienteComLeadIniciado(): ClienteMemoria {
   return new ClienteMemoria({
-    [TABELA_LEADS]: [],
+    [TABELA_LEADS]: [
+      {
+        id: '99999999-9999-4999-8999-999999999999',
+        telefone: TELEFONE_INICIADO,
+        nome: null,
+        controle_manual: false,
+        estagio: 'abertura',
+      },
+    ],
     [TABELA_MENSAGENS]: [],
     [TABELA_LEAD_FATOS]: [],
   });
@@ -42,16 +52,16 @@ function clienteVazio(): ClienteMemoria {
 
 describe('memória do lead no orquestrador', () => {
   it('apaga os fatos do lead quando ele pede para parar', async () => {
-    const cliente = clienteVazio();
+    const cliente = clienteComLeadIniciado();
     const deps = criarDeps(cliente, {
       detector: {
         detectar: () => Promise.resolve({ intencao: Intencao.NAO_INTERESSADO, confianca: 0.99 }),
       },
     });
 
-    // Primeiro turno cria o lead.
+    // Primeiro turno registra a mensagem no lead já iniciado pela prospecção.
     await processarMensagem(criarDeps(cliente), {
-      telefone: '5511999998888',
+      telefone: TELEFONE_INICIADO,
       texto: 'Tenho interesse',
     });
 
@@ -73,10 +83,10 @@ describe('memória do lead no orquestrador', () => {
   });
 
   it('preserva as mensagens da conversa após o expurgo dos fatos', async () => {
-    const cliente = clienteVazio();
+    const cliente = clienteComLeadIniciado();
 
     await processarMensagem(criarDeps(cliente), {
-      telefone: '5511999998888',
+      telefone: TELEFONE_INICIADO,
       texto: 'Tenho interesse',
     });
 
@@ -86,17 +96,17 @@ describe('memória do lead no orquestrador', () => {
           detectar: () => Promise.resolve({ intencao: Intencao.NAO_INTERESSADO, confianca: 0.99 }),
         },
       }),
-      { telefone: '5511999998888', texto: 'Pode parar de me mandar mensagem' },
+      { telefone: TELEFONE_INICIADO, texto: 'Pode parar de me mandar mensagem' },
     );
 
     expect(cliente.linhas(TABELA_MENSAGENS).length).toBeGreaterThan(0);
   });
 
   it('não apaga fatos em uma conversa normal', async () => {
-    const cliente = clienteVazio();
+    const cliente = clienteComLeadIniciado();
 
     await processarMensagem(criarDeps(cliente), {
-      telefone: '5511999998888',
+      telefone: TELEFONE_INICIADO,
       texto: 'Quero saber mais',
     });
 
@@ -104,7 +114,7 @@ describe('memória do lead no orquestrador', () => {
     await registrarFato({ cliente }, leadId, { conteudo: 'Trabalha com frete' });
 
     await processarMensagem(criarDeps(cliente), {
-      telefone: '5511999998888',
+      telefone: TELEFONE_INICIADO,
       texto: 'Como funciona o frete de vocês?',
     });
 
@@ -112,13 +122,13 @@ describe('memória do lead no orquestrador', () => {
   });
 
   it('usa os fatos relevantes ao montar o contexto da resposta', async () => {
-    const cliente = clienteVazio();
+    const cliente = clienteComLeadIniciado();
     const gerar = vi
       .fn()
       .mockResolvedValue({ resposta: 'Posso ajudar com frete.', origem: 'gpt' as const });
 
     await processarMensagem(criarDeps(cliente), {
-      telefone: '5511999998888',
+      telefone: TELEFONE_INICIADO,
       texto: 'Oi',
     });
 
@@ -129,7 +139,7 @@ describe('memória do lead no orquestrador', () => {
     });
 
     await processarMensagem(criarDeps(cliente, { gerador: { gerar } }), {
-      telefone: '5511999998888',
+      telefone: TELEFONE_INICIADO,
       texto: 'Qual o custo de frete que consigo?',
     });
 

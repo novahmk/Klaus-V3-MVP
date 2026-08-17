@@ -44,20 +44,56 @@ function clienteVazio(): ClienteMemoria {
   return new ClienteMemoria({ [TABELA_LEADS]: [], [TABELA_MENSAGENS]: [] });
 }
 
+const TELEFONE_INICIADO = '5511999998888';
+
+function clienteComLeadIniciado(estagio = 'abertura'): ClienteMemoria {
+  return new ClienteMemoria({
+    [TABELA_LEADS]: [
+      {
+        id: '99999999-9999-4999-8999-999999999999',
+        telefone: TELEFONE_INICIADO,
+        nome: null,
+        controle_manual: false,
+        estagio,
+      },
+    ],
+    [TABELA_MENSAGENS]: [],
+  });
+}
+
 describe('processarMensagem', () => {
-  it('persiste a mensagem recebida, responde e grava a resposta', async () => {
+  it('ignora número sem conversa iniciada e não cria lead nem responde', async () => {
     const cliente = clienteVazio();
+    const enviar = vi.fn();
+    const detectar = vi.fn();
+    const deps = criarDeps(cliente, { enviar, detector: { detectar } });
+
+    const resultado = await processarMensagem(deps, {
+      telefone: '5511777776666',
+      texto: 'Oi, vi vocês no Instagram',
+      waMessageId: 'wamid.ANTIGA',
+    });
+
+    expect(resultado.respondeu).toBe(false);
+    expect(enviar).not.toHaveBeenCalled();
+    expect(detectar).not.toHaveBeenCalled();
+    expect(cliente.linhas(TABELA_LEADS)).toHaveLength(0);
+    expect(cliente.linhas(TABELA_MENSAGENS)).toHaveLength(0);
+  });
+
+  it('persiste a mensagem recebida, responde e grava a resposta', async () => {
+    const cliente = clienteComLeadIniciado();
     const enviar = vi.fn().mockResolvedValue(undefined);
     const deps = criarDeps(cliente, { enviar });
 
     const resultado = await processarMensagem(deps, {
-      telefone: '5511999998888',
+      telefone: TELEFONE_INICIADO,
       texto: 'Quero saber mais',
       waMessageId: 'wamid.1',
     });
 
     expect(resultado.respondeu).toBe(true);
-    expect(enviar).toHaveBeenCalledWith('5511999998888', 'Claro, posso explicar.');
+    expect(enviar).toHaveBeenCalledWith(TELEFONE_INICIADO, 'Claro, posso explicar.');
     expect(cliente.linhas(TABELA_MENSAGENS)).toHaveLength(2);
   });
 
@@ -108,11 +144,11 @@ describe('processarMensagem', () => {
   });
 
   it('ignora reentrega do mesmo webhook sem responder de novo', async () => {
-    const cliente = clienteVazio();
+    const cliente = clienteComLeadIniciado();
     const enviar = vi.fn().mockResolvedValue(undefined);
     const deps = criarDeps(cliente, { enviar });
     const entrada = {
-      telefone: '5511999998888',
+      telefone: TELEFONE_INICIADO,
       texto: 'Oi',
       waMessageId: 'wamid.DUPLICADA',
     };
@@ -126,7 +162,7 @@ describe('processarMensagem', () => {
   });
 
   it('encerra e marca opt_out quando o lead pede para parar', async () => {
-    const cliente = clienteVazio();
+    const cliente = clienteComLeadIniciado();
     const enviar = vi.fn();
     const deps = criarDeps(cliente, {
       enviar,
@@ -136,7 +172,7 @@ describe('processarMensagem', () => {
     });
 
     const resultado = await processarMensagem(deps, {
-      telefone: '5511999998888',
+      telefone: TELEFONE_INICIADO,
       texto: 'Não quero mais receber mensagens',
     });
 
@@ -149,23 +185,23 @@ describe('processarMensagem', () => {
   });
 
   it('persiste o avanço de estágio no lead', async () => {
-    const cliente = clienteVazio();
+    const cliente = clienteComLeadIniciado();
     const deps = criarDeps(cliente);
 
-    await processarMensagem(deps, { telefone: '5511999998888', texto: 'Tenho interesse' });
+    await processarMensagem(deps, { telefone: TELEFONE_INICIADO, texto: 'Tenho interesse' });
 
     const lead = cliente.linhas(TABELA_LEADS)[0] as unknown as Lead & { estagio?: string };
     expect(lead.estagio).toBe('descoberta');
   });
 
   it('encaminha para handoff quando o score cruza o limiar', async () => {
-    const cliente = clienteVazio();
+    const cliente = clienteComLeadIniciado();
     const enviar = vi.fn();
     const deps = criarDeps(cliente, { enviar });
 
     const resultado = await processarMensagem(
       deps,
-      { telefone: '5511999998888', texto: 'Quero fechar', score: 85 },
+      { telefone: TELEFONE_INICIADO, texto: 'Quero fechar', score: 85 },
       { limiarHandoff: 70 },
     );
 
@@ -174,27 +210,27 @@ describe('processarMensagem', () => {
   });
 
   it('não perde a mensagem do lead quando a geração de resposta falha', async () => {
-    const cliente = clienteVazio();
+    const cliente = clienteComLeadIniciado();
     const deps = criarDeps(cliente, {
       gerador: { gerar: () => Promise.reject(new Error('IA indisponível')) },
     });
 
     await expect(
-      processarMensagem(deps, { telefone: '5511999998888', texto: 'Oi' }),
+      processarMensagem(deps, { telefone: TELEFONE_INICIADO, texto: 'Oi' }),
     ).rejects.toThrow('IA indisponível');
 
     expect(cliente.linhas(TABELA_MENSAGENS)).toHaveLength(1);
   });
 
   it('usa a abordagem sugerida quando informada', async () => {
-    const cliente = clienteVazio();
+    const cliente = clienteComLeadIniciado();
     const gerar = vi
       .fn()
       .mockResolvedValue({ resposta: 'Resposta pronta', origem: 'abordagem' as const });
     const deps = criarDeps(cliente, { gerador: { gerar } });
 
     const resultado = await processarMensagem(deps, {
-      telefone: '5511999998888',
+      telefone: TELEFONE_INICIADO,
       texto: 'Está caro',
       abordagem: { texto: 'Resposta pronta', confianca: 0.8 },
     });

@@ -1,5 +1,5 @@
 import { Intencao } from '../../components/1-deteccao-intencao/types.js';
-import { decidirProximoEstagio } from '../../dominio/playbook/index.js';
+import { ESTAGIO_INICIAL, decidirProximoEstagio } from '../../dominio/playbook/index.js';
 import type { DecisaoConversa, Estagio } from '../../dominio/playbook/index.js';
 import { ehEstagioValido } from '../../dominio/playbook/estagios.js';
 import {
@@ -10,7 +10,7 @@ import {
 } from '../../infra/memoria/index.js';
 import { esquecerLead, recuperarFatosRelevantes } from '../../infra/memoria/fatos.js';
 import type { ConfiguracaoAgente } from '../../infra/memoria/index.js';
-import { TABELA_LEADS, registrarMensagem } from '../../infra/persistencia/index.js';
+import { TABELA_LEADS, buscarLeadPorTelefone, registrarMensagem } from '../../infra/persistencia/index.js';
 import type { Lead, PersistenciaDependencies, RegrasConversa } from '../../infra/persistencia/index.js';
 import type {
   DetectorIntencao,
@@ -62,6 +62,22 @@ export async function processarMensagem(
   config: OrquestradorConfig = {},
 ): Promise<ResultadoProcessamento> {
   const agora = (deps.agora ?? (() => new Date()))();
+
+  // Klaus só conversa com quem ele mesmo iniciou (prospecção). Número sem lead
+  // é conversa antiga ou desconhecida: ignora sem criar registro nem responder.
+  const leadConhecido = await buscarLeadPorTelefone(deps.persistencia, entrada.telefone);
+
+  if (leadConhecido === null) {
+    deps.logger?.info('Número sem conversa iniciada pelo Klaus, ignorado.', {
+      waMessageId: entrada.waMessageId ?? null,
+    });
+
+    return {
+      estagio: ESTAGIO_INICIAL,
+      respondeu: false,
+      motivo: 'Número sem conversa iniciada pelo Klaus.',
+    };
+  }
 
   // 1. Persistir primeiro. Idempotente por waMessageId.
   const registro = await registrarMensagem(deps.persistencia, {
