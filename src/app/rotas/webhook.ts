@@ -46,6 +46,8 @@ export function registrarRotaWebhook(app: FastifyInstance, deps: DependenciasWeb
     const cabecalho = Array.isArray(recebido) ? recebido[0] : recebido;
 
     if (!segredoConfere(cabecalho, deps.segredo)) {
+      app.log.warn({ requisicao: 'webhook-invalid-secret' }, 'Webhook rejeitado: segredo inválido.');
+
       return resposta.status(401).send({ erro: 'Segredo do webhook inválido.' });
     }
 
