@@ -67,16 +67,35 @@ async function main(): Promise<void> {
   const trava = new TravaPorChave();
   const fila = new FilaMemoria<MensagemRecebida>();
 
-  const trabalhador = new Trabalhador<MensagemRecebida>(fila, (mensagem) =>
-    trava.executar(mensagem.telefone, async () => {
-      await processarMensagem(orquestrador, {
-        telefone: mensagem.telefone,
-        texto: mensagem.texto.length > 0 ? mensagem.texto : `[${mensagem.tipo}]`,
-        nome: mensagem.nome,
-        waMessageId: mensagem.waMessageId,
+  const trabalhador = new Trabalhador<MensagemRecebida>(fila, async (mensagem) => {
+    try {
+      await trava.executar(mensagem.telefone, async () => {
+        const resultado = await processarMensagem(orquestrador, {
+          telefone: mensagem.telefone,
+          texto: mensagem.texto.length > 0 ? mensagem.texto : `[${mensagem.tipo}]`,
+          nome: mensagem.nome,
+          waMessageId: mensagem.waMessageId,
+        });
+
+        if (!resultado.respondeu) {
+          app.log.info(
+            {
+              waMessageId: mensagem.waMessageId,
+              estagio: resultado.estagio,
+              motivo: resultado.motivo,
+            },
+            'Mensagem processada sem resposta.',
+          );
+        }
       });
-    }),
-  );
+    } catch (erro) {
+      app.log.error(
+        { err: erro, waMessageId: mensagem.waMessageId },
+        'Processamento da mensagem falhou.',
+      );
+      throw erro;
+    }
+  });
 
   // Build da SPA do dashboard (gerado por `npm run build`); ausente em dev
   // do backend puro, e nesse caso a raiz volta a ser o liveness JSON.
