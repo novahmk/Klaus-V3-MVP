@@ -111,8 +111,13 @@ async function main(): Promise<void> {
       enfileirar: (mensagem) => {
         fila.enfileirar(mensagem);
         trabalhador.notificar();
+        app.log.info(
+          { telefone: mensagem.telefone, waMessageId: mensagem.waMessageId },
+          'Mensagem enfileirada para processamento.',
+        );
       },
-      aoIgnorar: (motivo) => app.log.info({ motivo }, 'Webhook ignorado.'),
+      aoIgnorar: (motivo) =>
+        app.log.warn({ motivo, timestamp: new Date().toISOString() }, 'Webhook ignorado com motivo.'),
     },
     api: {
       chaveInterna: ambiente.internalApiKey,
