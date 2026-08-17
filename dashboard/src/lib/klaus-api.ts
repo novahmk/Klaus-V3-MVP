@@ -99,6 +99,7 @@ export async function iniciarProspeccao(opts: {
 
   const targets = itens.map((item) => ({
     phone: item.telefone.replace(/\D/g, ""),
+    name: item.nome,
     message: mensagem.replaceAll("{{nome}}", item.nome.split(" ")[0] ?? item.nome),
   }));
 

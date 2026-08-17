@@ -75,9 +75,18 @@ function Prospeccao() {
 
   const iniciarProspeccaoMutation = useMutation({
     mutationFn: iniciarProspeccao,
-    onSuccess: () => {
-      toast.success(`Prospecção iniciada para ${fila.length} contatos.`);
-      setFila([]);
+    onSuccess: (resultado) => {
+      const falhas = resultado.results.length - resultado.queued_count;
+
+      if (falhas > 0) {
+        toast.error(
+          `${resultado.queued_count} envios concluídos e ${falhas} falharam. A fila foi preservada.`,
+        );
+      } else {
+        toast.success(`Prospecção iniciada para ${resultado.queued_count} contatos.`);
+        setFila([]);
+      }
+
       void queryClient.invalidateQueries({ queryKey: ["leads"] });
     },
     onError: (err) => {

@@ -8,6 +8,7 @@ import {
   listarLeads,
   listarMensagensDoLead,
   registrarMensagem,
+  resolverLead,
   TABELA_REGRAS_CONVERSA,
 } from '../../infra/persistencia/index.js';
 import type { PersistenciaDependencies } from '../../infra/persistencia/index.js';
@@ -199,6 +200,7 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
                 properties: {
                   lead_id: { type: 'string', format: 'uuid' },
                   phone: { type: 'string' },
+                  name: { type: 'string', minLength: 1, maxLength: 200 },
                   message: { type: 'string', maxLength: 5000 },
                 },
                 additionalProperties: false,
@@ -214,7 +216,7 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
         texto?: string;
         lead_ids?: string[];
         telefones?: string[];
-        targets?: Array<{ lead_id?: string; phone?: string; message?: string }>;
+        targets?: Array<{ lead_id?: string; phone?: string; name?: string; message?: string }>;
       };
 
       if (Array.isArray(corpo.targets) && corpo.targets.length > 0) {
@@ -222,7 +224,12 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
           return resposta.status(503).send({ erro: 'Cliente de envio não configurado.' });
         }
 
-        const resultados: Array<{ lead_id?: string; phone?: string; status: string }> = [];
+        const resultados: Array<{
+          lead_id?: string;
+          phone?: string;
+          status: string;
+          error?: string;
+        }> = [];
         const agora = new Date().toISOString();
 
         for (const target of corpo.targets) {
@@ -246,26 +253,8 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
 
               leadId = lead.id;
             } else if (target.phone !== undefined) {
-              const leads = await deps.persistencia.cliente.selecionarTodos<{ id: string }>('leads', {
-                telefone: target.phone,
-              });
-
-              if (leads.length > 0) {
-                const leadExistente = leads[0];
-
-                if (leadExistente !== undefined) {
-                  leadId = leadExistente.id;
-                }
-              }
-
-              if (leadId === null) {
-                const novoLead = await deps.persistencia.cliente.inserirUm<{ id: string }>('leads', {
-                  telefone: target.phone,
-                  estagio: 'novo',
-                  criado_em: agora,
-                });
-                leadId = novoLead.id;
-              }
+              const lead = await resolverLead(deps.persistencia, target.phone, target.name);
+              leadId = lead.id;
             }
 
             if (leadId === null) {
@@ -291,8 +280,16 @@ export function registrarRotasApi(app: FastifyInstance, deps: DependenciasApi): 
             });
 
             resultados.push({ lead_id: leadId, status: 'queued' });
-          } catch {
-            resultados.push({ phone: target.phone, status: 'error' });
+          } catch (error) {
+            app.log.error(
+              { err: error, phone: target.phone },
+              'Falha ao processar alvo da prospecção.',
+            );
+            resultados.push({
+              phone: target.phone,
+              status: 'error',
+              error: error instanceof Error ? error.message : 'Falha desconhecida.',
+            });
           }
         }
 

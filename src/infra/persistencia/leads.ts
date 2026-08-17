@@ -53,6 +53,7 @@ export async function resolverLead(
       [COLUNA_TELEFONE]: telefoneNormalizado,
       nome: nome ?? null,
       controle_manual: false,
+      estagio: 'abertura',
     });
   } catch (error) {
     // Corrida: dois webhooks do mesmo número chegaram juntos e o outro venceu.

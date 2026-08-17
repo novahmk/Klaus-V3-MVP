@@ -437,7 +437,7 @@ describe('POST /api/prospeccao/manual-disparos com targets', () => {
     await app.close();
   });
 
-  it('cria novo lead para telefone desconhecido', async () => {
+  it('cria novo lead com nome e estágio inicial para telefone desconhecido', async () => {
     const enviar = vi.fn().mockResolvedValue(undefined);
     const { app, cliente } = criarApp({ enviar });
 
@@ -446,7 +446,7 @@ describe('POST /api/prospeccao/manual-disparos com targets', () => {
       url: '/api/prospeccao/manual-disparos',
       headers: auth,
       payload: {
-        targets: [{ phone: '5511888888888', message: 'Primeira mensagem' }],
+        targets: [{ phone: '5511888888888', name: 'Contato Novo', message: 'Primeira mensagem' }],
       },
     });
 
@@ -456,7 +456,7 @@ describe('POST /api/prospeccao/manual-disparos com targets', () => {
     const leads = cliente.linhas(TABELA_LEADS);
     const novoLead = leads.find((l) => l.telefone === '5511888888888');
     expect(novoLead).toBeDefined();
-    expect(novoLead?.estagio).toBe('novo');
+    expect(novoLead).toMatchObject({ nome: 'Contato Novo', estagio: 'abertura' });
 
     await app.close();
   });
